@@ -8,7 +8,7 @@ export const plans = pgTable('plans', {
     startTime: timestamp('start_time'),
     duration: integer('duration'),
     planningCenterUrl: text('planning_center_url'),
-    personIds: text('person_ids').array(),
+    personIds: integer('person_ids').array(),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
 });

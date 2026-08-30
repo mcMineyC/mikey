@@ -1,0 +1,1 @@
+ALTER TABLE "plans" ALTER COLUMN "person_ids" SET DATA TYPE integer[];

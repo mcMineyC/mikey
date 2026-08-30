@@ -70,131 +70,252 @@ class Database {
                 throw new Error('Plan data is required');
             }
 
-            // Extract plan data - handle different possible structures
-            const attrs = plan.rawData?.attributes || plan.attributes || {};
-            
-            // Build plan data object, excluding null values
-            const planData = {
-                planCenterId: plan.id,
-                title: attrs.name || 'Untitled Plan',
-                planningCenterUrl: `https://services.planningcenteronline.com/plans/${plan.id}`,
-            };
+            // Planning Center API response structure:
+            //
+            // plan = {
+            //   type: "Plan",
+            //   id: "90641360",
+            //   attributes: {
+            //     title: "Consider War: Eli",
+            //     dates: "August 29, 2026",
+            //     sort_date: "2026-08-29T16:00:00Z",
+            //     total_length: 3919,
+            //     planning_center_url: "https://services.planningcenteronline.com/plans/90641360",
+            //     ...
+            //   }
+            // }
 
-            // Only add optional fields if they have values
-            const startTime = attrs.dates?.start_time 
-                ? new Date(attrs.dates.start_time) 
-                : (attrs.start_time ? new Date(attrs.start_time) : null);
-            if (startTime) {
-                planData.startTime = startTime;
-            }
+            const attrs = plan.attributes || plan.rawData?.attributes || {};
 
-            const duration = attrs.dates?.duration_minutes || attrs.duration_minutes;
-            if (duration) {
-                planData.duration = duration;
-            }
+            const planCenterId = String(plan.id);
 
-            console.log(`Importing plan: ${JSON.stringify(planData)}`);
+            const title = attrs.title || 'Untitled Plan';
 
-            // Check if plan exists
-            const existingPlan = await this.db
-                .select()
-                .from(schema.plans)
-                .where(eq(schema.plans.planCenterId, plan.id));
+            const planningCenterUrl =
+                attrs.planning_center_url ||
+                `https://services.planningcenteronline.com/plans/${planCenterId}`;
 
-            let insertedPlan;
-            if (existingPlan.length > 0) {
-                // Update existing plan
-                const [updated] = await this.db
-                    .update(schema.plans)
-                    .set({
-                        title: planData.title,
-                        startTime: planData.startTime,
-                        duration: planData.duration,
-                        planningCenterUrl: planData.planningCenterUrl,
-                        updatedAt: new Date(),
-                    })
-                    .where(eq(schema.plans.planCenterId, plan.id))
-                    .returning();
-                insertedPlan = updated;
-                console.log(`✓ Plan updated: ${planData.title} (ID: ${plan.id})`);
-            } else {
-                // Insert new plan
-                const [inserted] = await this.db
-                    .insert(schema.plans)
-                    .values(planData)
-                    .returning();
-                insertedPlan = inserted;
-                console.log(`✓ Plan created: ${planData.title} (ID: ${plan.id})`);
-            }
+            /*
+            * Planning Center's `sort_date` is the actual ISO timestamp
+            * representing the plan's date/time.
+            *
+            * Example:
+            *   "2026-08-29T16:00:00Z"
+            */
+            let startTime = null;
 
-            // Import people
-            let peopleCount = 0;
-            const personIds = [];
-            
-            if (Array.isArray(people) && people.length > 0) {
-                for (const person of people) {
-                    const personData = {
-                        planCenterId: person.id,
-                        name: person.name,
-                        positionName: person.team_position_name,
-                        thumbnailUrl: person.photo_thumbnail_url,
-                    };
+            if (attrs.sort_date) {
+                const parsedStartTime = new Date(attrs.sort_date);
 
-                    // Collect person Planning Center ID
-                    personIds.push(person.id);
-
-                    // Check if person exists
-                    const existingPerson = await this.db
-                        .select()
-                        .from(schema.people)
-                        .where(eq(schema.people.planCenterId, person.id));
-
-                    if (existingPerson.length > 0) {
-                        await this.db
-                            .update(schema.people)
-                            .set({
-                                name: personData.name,
-                                positionName: personData.positionName,
-                                thumbnailUrl: personData.thumbnailUrl,
-                                updatedAt: new Date(),
-                            })
-                            .where(eq(schema.people.planCenterId, person.id));
-                    } else {
-                        await this.db
-                            .insert(schema.people)
-                            .values(personData);
-                    }
-
-                    peopleCount++;
+                if (!Number.isNaN(parsedStartTime.getTime())) {
+                    startTime = parsedStartTime;
                 }
             }
 
-            // Update plan with list of person IDs
-            if (existingPlan.length > 0) {
-                await this.db
-                    .update(schema.plans)
-                    .set({
-                        personIds: personIds,
-                        updatedAt: new Date(),
-                    })
-                    .where(eq(schema.plans.planCenterId, plan.id));
-            } else {
-                planData.personIds = personIds;
+            /*
+            * Planning Center's `total_length` is the total plan length
+            * in seconds.
+            *
+            * Example:
+            *   3919 seconds = ~65.3 minutes
+            *
+            * If the database's `duration` column is intended to store
+            * seconds, keep this value as-is.
+            */
+            let duration = null;
+
+            if (
+                attrs.total_length !== null &&
+                attrs.total_length !== undefined
+            ) {
+                const parsedDuration = Number(attrs.total_length);
+
+                if (!Number.isNaN(parsedDuration)) {
+                    duration = parsedDuration;
+                }
             }
+
+            console.log('Importing plan:', {
+                planCenterId,
+                title,
+                startTime,
+                duration,
+                planningCenterUrl,
+            });
+
+            /*
+            * Build the insert object dynamically.
+            *
+            * This is important because we don't want undefined values
+            * being sent to PostgreSQL as DEFAULT.
+            */
+            const planValues = {
+                planCenterId,
+                title,
+                planningCenterUrl,
+            };
+
+            if (startTime !== null) {
+                planValues.startTime = startTime;
+            }
+
+            if (duration !== null) {
+                planValues.duration = duration;
+            }
+
+            /*
+            * Upsert plan.
+            */
+            const [insertedPlan] = await this.db
+                .insert(schema.plans)
+                .values(planValues)
+                .onConflictDoUpdate({
+                    target: schema.plans.planCenterId,
+                    set: {
+                        title,
+                        planningCenterUrl,
+
+                        ...(startTime !== null
+                            ? { startTime }
+                            : {}),
+
+                        ...(duration !== null
+                            ? { duration }
+                            : {}),
+
+                        updatedAt: new Date(),
+                    },
+                })
+                .returning({
+                    id: schema.plans.id,
+                    planCenterId: schema.plans.planCenterId,
+                    title: schema.plans.title,
+                });
+
+            console.log(
+                `✓ Plan imported: ${insertedPlan.title} ` +
+                `(ID: ${insertedPlan.planCenterId})`
+            );
+
+            /*
+            * Import people associated with the plan.
+            */
+            let peopleCount = 0;
+            const personIds = [];
+
+            if (Array.isArray(people) && people.length > 0) {
+                for (const person of people) {
+                    if (!person || !person.id) {
+                        console.warn(
+                            'Skipping person with no Planning Center ID:',
+                            person
+                        );
+                        continue;
+                    }
+
+                    const personValues = {
+                        planCenterId: String(person.id),
+                    };
+
+                    if (person.name !== undefined && person.name !== null) {
+                        personValues.name = person.name;
+                    }
+
+                    if (
+                        person.team_position_name !== undefined &&
+                        person.team_position_name !== null
+                    ) {
+                        personValues.positionName =
+                            person.team_position_name;
+                    }
+
+                    if (
+                        person.photo_thumbnail_url !== undefined &&
+                        person.photo_thumbnail_url !== null
+                    ) {
+                        personValues.thumbnailUrl =
+                            person.photo_thumbnail_url;
+                    }
+
+                    const [upsertedPerson] = await this.db
+                        .insert(schema.people)
+                        .values(personValues)
+                        .onConflictDoUpdate({
+                            target: schema.people.planCenterId,
+                            set: {
+                                ...(person.name !== undefined &&
+                                person.name !== null
+                                    ? { name: person.name }
+                                    : {}),
+
+                                ...(person.team_position_name !== undefined &&
+                                person.team_position_name !== null
+                                    ? {
+                                        positionName:
+                                            person.team_position_name,
+                                    }
+                                    : {}),
+
+                                ...(person.photo_thumbnail_url !== undefined &&
+                                person.photo_thumbnail_url !== null
+                                    ? {
+                                        thumbnailUrl:
+                                            person.photo_thumbnail_url,
+                                    }
+                                    : {}),
+
+                                updatedAt: new Date(),
+                            },
+                        })
+                        .returning({
+                            id: schema.people.id,
+                        });
+
+                    if (upsertedPerson?.id) {
+                        personIds.push(upsertedPerson.id);
+                        peopleCount++;
+                    }
+                }
+            }
+
+            /*
+            * Store the database IDs of the people associated with this plan.
+            */
+            await this.db
+                .update(schema.plans)
+                .set({
+                    personIds,
+                    updatedAt: new Date(),
+                })
+                .where(eq(schema.plans.id, insertedPlan.id));
 
             console.log(`✓ Imported ${peopleCount} people`);
 
             return {
                 planId: insertedPlan.id,
-                planCenterId: plan.id,
-                personIds: personIds,
+                planCenterId,
+                personIds,
                 peopleCount,
             };
         } catch (err) {
-            console.error('Error importing Planning Center data:', err.message);
+            console.error(
+                'Error importing Planning Center data:',
+                err
+            );
+
+            // Drizzle/Postgres errors can contain the actual database
+            // error in `cause`, so log it if available.
+            if (err.cause) {
+                console.error(
+                    'Underlying database error:',
+                    err.cause
+                );
+            }
+
             throw err;
         }
     }
 }
+
 
 export const database = new Database();

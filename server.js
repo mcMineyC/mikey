@@ -7,7 +7,7 @@ try {
 } catch (err) {
     process.exitCode = 1;
 } finally {
-    await pgdb.close();
+    // await pgdb.close();
 }
 
 const db = pgdb.getDrizzle();

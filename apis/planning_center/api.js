@@ -4,8 +4,9 @@
  */
 
 export class PlanningCenterAPI {
-    constructor(client) {
+    constructor(client, imageCache) {
         this.client = client;
+        this.imageCache = imageCache;
     }
 
     // Services methods
@@ -93,6 +94,24 @@ export class PlanningCenterAPI {
 
     async getScheduledTeam(serviceTypeId, planId) {
         const members = await this.getTeamMembers(serviceTypeId, planId);
-        return members.filter(m => m.status === 'C');
+        const scheduled = members.filter(m => m.status === 'C');
+        return scheduled;
+    }
+
+    /**
+     * Cache profile images for an array of team members
+     * @param {Array} teamMembers - Array of team member objects with photo_thumbnail_url
+     */
+    async cacheTeamImages(teamMembers) {
+        if (!Array.isArray(teamMembers)) {
+            console.warn('cacheTeamImages expects an array of team members');
+            return;
+        }
+
+        for (const member of teamMembers) {
+            if (member.photo_thumbnail_url) {
+                await this.imageCache.cache(member.photo_thumbnail_url);
+            }
+        }
     }
 }

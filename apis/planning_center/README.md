@@ -44,3 +44,16 @@ PAT creation and security
 5. When running via Docker Compose the secret will be available inside the container at `/run/secrets/PLANNING_CENTER_PAT`. The `app` service in `docker-compose.yml` will load that value into the `PLANNING_CENTER_PAT` environment variable automatically on start.
 
 If you prefer not to use Docker secrets you can set the `PLANNING_CENTER_CLIENT_ID` and `PLANNING_CENTER_CLIENT_SECRET` environment variables individually instead.
+
+Example script
+---------------
+
+There's a small example that demonstrates fetching past (through yesterday) and upcoming service dates:
+
+Run it locally (Node 18+):
+
+```bash
+node planning_center/examples/fetch_services.js
+```
+
+Or run inside the container after ensuring the PAT secret is available via Docker Compose.

@@ -143,3 +143,5 @@ vite.config.ts.timestamp-*
 .vite/
 data/*
 ./secrets
+next_plan_and_team.json
+plans.json

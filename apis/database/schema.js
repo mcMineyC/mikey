@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, varchar, integer, foreignKey, text as textArray } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, timestamp, varchar, integer } from 'drizzle-orm/pg-core';
 
 
 export const plans = pgTable('plans', {

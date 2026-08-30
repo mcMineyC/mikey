@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from './schema.js';
 

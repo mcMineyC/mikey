@@ -1,7 +1,8 @@
 import fs from 'fs';
-import { database } from './apis/database/index.js';
+import { Database } from './apis/database/index.js';
 import { planningCenter } from './apis/planning_center/index.js';
 
+const database = new Database();
 // Initialize database
 try {
     await database.test();

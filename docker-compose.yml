@@ -23,7 +23,10 @@ services:
       - ./node_modules:/usr/src/app/node_modules:delegated
     ports:
       - "3000:3000"
-    command: sh -c "npm install --silent && npm install --silent nodemon && if [ \"$$DEV\" = 'true' ]; then npx nodemon --watch . --exec \"npm run start\"; else npm run start; fi"
+    # Load PLANNING_CENTER_PAT from Docker secret if present, then run the app
+    secrets:
+      - PLANNING_CENTER_PAT
+    command: sh -c "if [ -f /run/secrets/PLANNING_CENTER_PAT ]; then export PLANNING_CENTER_PAT=$(cat /run/secrets/PLANNING_CENTER_PAT); fi && npm install --silent && npm install --silent nodemon && if [ \"$$DEV\" = 'true' ]; then npx nodemon --watch . --exec \"npm run start\"; else npm run start; fi"
     depends_on:
       - db
     environment:
@@ -32,3 +35,7 @@ services:
     restart: on-failure
     stdin_open: true
     tty: true
+
+secrets:
+  PLANNING_CENTER_PAT:
+    file: ./secrets/planning_center_pat.txt

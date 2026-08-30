@@ -11,6 +11,8 @@ const pool = new Pool({
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
+
+
 try {
     const { rows } = await pool.query('SELECT NOW() AS now');
     console.log('Postgres time:', rows[0].now);

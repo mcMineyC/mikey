@@ -1,0 +1,22 @@
+{
+  "name": "mikey",
+  "version": "1.0.0",
+  "description": "Mic Display & Organisation for Shure Recievers + Planning Center Services",
+  "homepage": "https://github.com/mcMineyC/mikey#readme",
+  "bugs": {
+    "url": "https://github.com/mcMineyC/mikey/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mcMineyC/mikey.git"
+  },
+  "author": "mcMineyC",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

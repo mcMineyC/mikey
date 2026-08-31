@@ -15,29 +15,6 @@ const db = pgdb.getDrizzle();
 // Fetch Planning Center data
 try {
     const SERVICE_TYPE_ID = process.env.PLANNING_CENTER_SERVICE_TYPE_ID;
-
-    const nextPlans = await pc.getNewestPlans(SERVICE_TYPE_ID, 1);
-
-    if (!nextPlans || nextPlans.length === 0) {
-        console.log('No upcoming plans found');
-    } else {
-        for (const nextPlan of nextPlans) {
-            console.log('Next plan:', { id: nextPlan.id, title: nextPlan.title, type: nextPlan.type });
-
-            const scheduledTeam = await pc.getScheduledTeam(SERVICE_TYPE_ID, nextPlan.id);
-            await pc.cacheTeamImages(scheduledTeam);
-            
-            for (const member of scheduledTeam) {
-                console.log(`- ${member.name} (${member.team_position_name})`);
-            }
-            fs.writeFileSync(
-                'next_plan_and_team.json',
-                JSON.stringify({ plan: nextPlan.rawData, scheduledPeople: scheduledTeam }, null, 2)
-            );
-            await pgdb.importPlanningCenterData(nextPlan, scheduledTeam);
-            console.log('✓ Wrote next_plan_and_team.json and imported data into database');
-        }
-    }
 } catch (err) {
     console.warn('⚠ Planning Center sync failed:', err && err.message ? err.message : err);
 }

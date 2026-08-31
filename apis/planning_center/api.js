@@ -59,12 +59,12 @@ export class PlanningCenterAPI {
         }
     }
 
-    async getNewestPlans(serviceTypeId, num = 10) {
+    async getNewestPlans(serviceTypeId, num = 10, offset = 0) {
         try {
             if(num > 15)
                 console.warn("Planning Center API limits the number of plans returned to 15. Requested:", num);
             const resp = await this.client.get(
-                `https://api.planningcenteronline.com/services/v2/service_types/${serviceTypeId}/plans?order=-sort_date&per_page=${num}`
+                `https://api.planningcenteronline.com/services/v2/service_types/${serviceTypeId}/plans?order=-sort_date&per_page=${num}${offset > 0 ? `&page=${offset}` : ''}`
             );
 
             const plans = Array.isArray(resp.data) && resp.data;

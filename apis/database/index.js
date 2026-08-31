@@ -334,6 +334,53 @@ class Database {
             throw err;
         }
     }
+
+    async queryPlan({ planningCenterId, dbId } = {}) {
+        if (!planningCenterId && !dbId) {
+            throw new Error('Either planningCenterId or dbId must be provided');
+        }
+
+        const whereClause = planningCenterId
+            ? { planCenterId: planningCenterId }
+            : { id: dbId };
+
+        const result = await this.db
+            .select({
+                plan: {
+                    id: schema.plans.id,
+                    planCenterId: schema.plans.planCenterId,
+                    title: schema.plans.title,
+                    startTime: schema.plans.startTime,
+                    duration: schema.plans.duration,
+                    planningCenterUrl: schema.plans.planningCenterUrl,
+                },
+                person: {
+                    id: schema.people.id,
+                    planCenterId: schema.people.planCenterId,
+                    name: schema.people.name,
+                    positionName: schema.people.positionName,
+                    thumbnailUrl: schema.people.thumbnailUrl,
+                },
+                role: schema.planAssignments.role,
+            })
+            .from(schema.plans)
+            .leftJoin(
+                schema.planAssignments,
+                eq(
+                    schema.planAssignments.planId,
+                    schema.plans.id
+                )
+            )
+            .leftJoin(
+                schema.people,
+                eq(
+                    schema.people.id,
+                    schema.planAssignments.personId
+                )
+            )
+            .where(whereClause);
+        return result;
+    }
 }
 
 

@@ -23,6 +23,7 @@ services:
       - ./node_modules:/usr/src/app/node_modules:delegated
     ports:
       - "3000:3000"
+      - "9229:9229" # Debugging port for Node.js inspector
     # Load PLANNING_CENTER_PAT from Docker secret if present, then run the app
     secrets:
       - PLANNING_CENTER_PAT
@@ -33,9 +34,9 @@ services:
       npm install --silent
       npm install --silent nodemon
       if [ \"$$DEV\" = 'true' ]; then
-      npx nodemon --watch . --ignore '*.json' --exec \"npm run start\"
+      npx nodemon --watch . --ignore '*.json' --exec \"npm run debug\"
       else
-      npm run start
+      npm run debug
       fi"
     depends_on:
       - db

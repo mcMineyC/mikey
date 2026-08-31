@@ -1,0 +1,1 @@
+ALTER TABLE "people" DROP COLUMN "position_name";

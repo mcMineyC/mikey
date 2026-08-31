@@ -29,6 +29,20 @@
       "when": 1788065232655,
       "tag": "0003_late_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788146628779,
+      "tag": "0004_large_major_mapleleaf",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788149508481,
+      "tag": "0005_strange_warpath",
+      "breakpoints": true
     }
   ]
 }

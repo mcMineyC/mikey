@@ -70,37 +70,21 @@ class Database {
                 throw new Error('Plan data is required');
             }
 
-            // Planning Center API response structure:
-            //
-            // plan = {
-            //   type: "Plan",
-            //   id: "90641360",
-            //   attributes: {
-            //     title: "Consider War: Eli",
-            //     dates: "August 29, 2026",
-            //     sort_date: "2026-08-29T16:00:00Z",
-            //     total_length: 3919,
-            //     planning_center_url: "https://services.planningcenteronline.com/plans/90641360",
-            //     ...
-            //   }
-            // }
-
             const attrs = plan.attributes || plan.rawData?.attributes || {};
 
             const planCenterId = String(plan.id);
 
-            const title = attrs.title || 'Untitled Plan';
+            const title =
+                attrs.title ||
+                'Untitled Plan';
 
             const planningCenterUrl =
                 attrs.planning_center_url ||
                 `https://services.planningcenteronline.com/plans/${planCenterId}`;
 
             /*
-            * Planning Center's `sort_date` is the actual ISO timestamp
-            * representing the plan's date/time.
-            *
-            * Example:
-            *   "2026-08-29T16:00:00Z"
+            * Planning Center's sort_date is the actual plan start
+            * timestamp.
             */
             let startTime = null;
 
@@ -113,14 +97,7 @@ class Database {
             }
 
             /*
-            * Planning Center's `total_length` is the total plan length
-            * in seconds.
-            *
-            * Example:
-            *   3919 seconds = ~65.3 minutes
-            *
-            * If the database's `duration` column is intended to store
-            * seconds, keep this value as-is.
+            * Planning Center's total_length is in seconds.
             */
             let duration = null;
 
@@ -144,10 +121,7 @@ class Database {
             });
 
             /*
-            * Build the insert object dynamically.
-            *
-            * This is important because we don't want undefined values
-            * being sent to PostgreSQL as DEFAULT.
+            * Build the plan insert object without undefined values.
             */
             const planValues = {
                 planCenterId,
@@ -164,7 +138,7 @@ class Database {
             }
 
             /*
-            * Upsert plan.
+            * Upsert the plan.
             */
             const [insertedPlan] = await this.db
                 .insert(schema.plans)
@@ -198,13 +172,40 @@ class Database {
             );
 
             /*
-            * Import people associated with the plan.
+            * Before importing assignments, remove the plan's existing
+            * assignments.
+            *
+            * This is important because assignments can change between
+            * syncs.
+            *
+            * Example:
+            *
+            * Previous sync:
+            *   Chloe → Keys
+            *   Chloe → Worship Leader
+            *
+            * Current sync:
+            *   Chloe → Worship Leader
+            *
+            * Removing the old assignments first prevents "Keys" from
+            * incorrectly remaining attached to the plan.
             */
+            await this.db
+                .delete(schema.planAssignments)
+                .where(
+                    eq(
+                        schema.planAssignments.planId,
+                        insertedPlan.id
+                    )
+                );
+
             let peopleCount = 0;
-            const personIds = [];
+            let assignmentCount = 0;
 
             if (Array.isArray(people) && people.length > 0) {
                 for (const person of people) {
+
+                    person.id = person.rawData.relationships.person.data.id
                     if (!person || !person.id) {
                         console.warn(
                             'Skipping person with no Planning Center ID:',
@@ -213,20 +214,22 @@ class Database {
                         continue;
                     }
 
+                    /*
+                    * Upsert the person itself.
+                    *
+                    * The person's positionName is NOT used as the
+                    * plan-specific assignment. The assignment below
+                    * contains the role for this particular plan.
+                    */
                     const personValues = {
                         planCenterId: String(person.id),
                     };
 
-                    if (person.name !== undefined && person.name !== null) {
-                        personValues.name = person.name;
-                    }
-
                     if (
-                        person.team_position_name !== undefined &&
-                        person.team_position_name !== null
+                        person.name !== undefined &&
+                        person.name !== null
                     ) {
-                        personValues.positionName =
-                            person.team_position_name;
+                        personValues.name = person.name;
                     }
 
                     if (
@@ -243,27 +246,8 @@ class Database {
                         .onConflictDoUpdate({
                             target: schema.people.planCenterId,
                             set: {
-                                ...(person.name !== undefined &&
-                                person.name !== null
-                                    ? { name: person.name }
-                                    : {}),
-
-                                ...(person.team_position_name !== undefined &&
-                                person.team_position_name !== null
-                                    ? {
-                                        positionName:
-                                            person.team_position_name,
-                                    }
-                                    : {}),
-
-                                ...(person.photo_thumbnail_url !== undefined &&
-                                person.photo_thumbnail_url !== null
-                                    ? {
-                                        thumbnailUrl:
-                                            person.photo_thumbnail_url,
-                                    }
-                                    : {}),
-
+                                name: person.name,
+                                thumbnailUrl: person.photo_thumbnail_url,
                                 updatedAt: new Date(),
                             },
                         })
@@ -271,31 +255,68 @@ class Database {
                             id: schema.people.id,
                         });
 
-                    if (upsertedPerson?.id) {
-                        personIds.push(upsertedPerson.id);
-                        peopleCount++;
+                    if (!upsertedPerson?.id) {
+                        console.warn(
+                            `Could not get database ID for person ${person.id}`
+                        );
+                        continue;
                     }
+
+                    peopleCount++;
+
+                    /*
+                    * Planning Center returns the person's plan-specific
+                    * role as team_position_name.
+                    *
+                    * Some people may have multiple entries in the
+                    * `people` array with different roles.
+                    *
+                    * Example:
+                    *
+                    *   Chloe Feilteau (Keys)
+                    *   Chloe Feilteau (Worship Leader)
+                    *
+                    * Those become two assignments.
+                    */
+                    const role =
+                        person.team_position_name ||
+                        person.position_name ||
+                        person.role ||
+                        null;
+
+                    if (!role) {
+                        console.warn(
+                            `No role found for ${person.name || person.id}`
+                        );
+                        continue;
+                    }
+
+                    await this.db
+                        .insert(schema.planAssignments)
+                        .values({
+                            planId: insertedPlan.id,
+                            personId: upsertedPerson.id,
+                            role,
+                        })
+                        .onConflictDoNothing();
+
+                    assignmentCount++;
                 }
             }
 
-            /*
-            * Store the database IDs of the people associated with this plan.
-            */
-            await this.db
-                .update(schema.plans)
-                .set({
-                    personIds,
-                    updatedAt: new Date(),
-                })
-                .where(eq(schema.plans.id, insertedPlan.id));
+            console.log(
+                `✓ Imported ${peopleCount} people`
+            );
 
-            console.log(`✓ Imported ${peopleCount} people`);
+            console.log(
+                `✓ Imported ${assignmentCount} assignments`
+            );
 
             return {
                 planId: insertedPlan.id,
                 planCenterId,
-                personIds,
                 peopleCount,
+                assignmentCount,
             };
         } catch (err) {
             console.error(
@@ -303,8 +324,6 @@ class Database {
                 err
             );
 
-            // Drizzle/Postgres errors can contain the actual database
-            // error in `cause`, so log it if available.
             if (err.cause) {
                 console.error(
                     'Underlying database error:',

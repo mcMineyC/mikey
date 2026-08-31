@@ -34,6 +34,58 @@ export class PlanningCenterAPI {
         }
     }
 
+    // Services methods
+    async getNewestPlan(serviceTypeId) {
+        try {
+            const upcomingResp = await this.client.get(
+                `https://api.planningcenteronline.com/services/v2/service_types/${serviceTypeId}/plans?order=-sort_date&per_page=1`
+            );
+
+            const nextPlan = Array.isArray(upcomingResp.data) && upcomingResp.data[0];
+            if (!nextPlan) {
+                console.log(`No upcoming plans found for service type ${serviceTypeId}`);
+                return null;
+            }
+
+            return {
+                id: nextPlan.id,
+                type: nextPlan.type,
+                attributes: nextPlan.attributes,
+                rawData: nextPlan
+            };
+        } catch (err) {
+            console.error('Error fetching next plan:', err.message);
+            throw err;
+        }
+    }
+
+    async getNewestPlans(serviceTypeId, num = 10) {
+        try {
+            if(num > 15)
+                console.warn("Planning Center API limits the number of plans returned to 15. Requested:", num);
+            const resp = await this.client.get(
+                `https://api.planningcenteronline.com/services/v2/service_types/${serviceTypeId}/plans?order=-sort_date&per_page=${num}`
+            );
+
+            const plans = Array.isArray(resp.data) && resp.data;
+            if (!plans) {
+                console.log(`No upcoming plans found for service type ${serviceTypeId}`);
+                return null;
+            }
+
+            return plans.map(plan => ({
+                id: plan.id,
+                title: plan.attributes?.title,
+                type: plan.type,
+                attributes: plan.attributes,
+                rawData: plan
+            }));
+        } catch (err) {
+            console.error('Error fetching next plan:', err.message);
+            throw err;
+        }
+    }
+
     async getPlan(serviceTypeId, planId) {
         try {
             const resp = await this.client.get(
@@ -78,7 +130,7 @@ export class PlanningCenterAPI {
 
     formatTeamMember(rawMember) {
         return {
-            id: rawMember.id,
+            id: rawMember.relationships.person.data.id,
             name: rawMember.attributes?.name,
             status: rawMember.attributes?.status,
             team_position_name: rawMember.attributes?.team_position_name,

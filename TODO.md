@@ -26,8 +26,9 @@
 
 # Backend Interaction
 - [ ] Basic HTTP API
-    - [ ] GET / - "go to \<a href="/clientview">client view\<a>"
-    - [ ] GET /clientview -> serves web build directory
+    - [ ] GET / - "go to \<a href="/clientview">client view\<a> or \<a href="/managerview">manager view\<a>"
+    - [ ] GET /clientview -> serves client web build directory
+    - [ ] GET /managerview -> serves manager web build directory (no mDNS?)
     - [ ] GET /plans - [{}] returning plan ids, name, and start time
     - [ ] GET /plan/:id - {} detailed info about plan (aka full query)
     - [ ] GET /plan/next - {} full query, returns ongoing plan (if in duration) or upcoming plan (if within same day)

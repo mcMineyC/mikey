@@ -341,27 +341,25 @@ class Database {
         }
 
         const whereClause = planningCenterId
-            ? { planCenterId: planningCenterId }
-            : { id: dbId };
+            ? eq(schema.plans.planCenterId, planningCenterId)
+            : eq(schema.plans.id, dbId);
 
-        const result = await this.db
+        const rows = await this.db
             .select({
-                plan: {
-                    id: schema.plans.id,
-                    planCenterId: schema.plans.planCenterId,
-                    title: schema.plans.title,
-                    startTime: schema.plans.startTime,
-                    duration: schema.plans.duration,
-                    planningCenterUrl: schema.plans.planningCenterUrl,
-                },
-                person: {
-                    id: schema.people.id,
-                    planCenterId: schema.people.planCenterId,
-                    name: schema.people.name,
-                    positionName: schema.people.positionName,
-                    thumbnailUrl: schema.people.thumbnailUrl,
-                },
+                planId: schema.plans.id,
+                planCenterId: schema.plans.planCenterId,
+                title: schema.plans.title,
+                startTime: schema.plans.startTime,
+                duration: schema.plans.duration,
+                planningCenterUrl: schema.plans.planningCenterUrl,
+
+                assignmentId: schema.planAssignments.id,
                 role: schema.planAssignments.role,
+
+                personId: schema.people.id,
+                personCenterId: schema.people.planCenterId,
+                personName: schema.people.name,
+                thumbnailUrl: schema.people.thumbnailUrl,
             })
             .from(schema.plans)
             .leftJoin(
@@ -378,8 +376,77 @@ class Database {
                     schema.planAssignments.personId
                 )
             )
-            .where(whereClause);
+            .where(
+                planningCenterId
+                    ? eq(schema.plans.planCenterId, planningCenterId)
+                    : eq(schema.plans.id, dbId)
+            );
+            
+        if (rows.length === 0) {
+            return null;
+        }
+
+        const first = rows[0];
+
+        const result = {
+            id: first.planId,
+            planCenterId: first.planCenterId,
+            title: first.title,
+            startTime: first.startTime,
+            duration: first.duration,
+            planningCenterUrl: first.planningCenterUrl,
+            people: [],
+        };
+
+        const peopleById = new Map();
+
+        for (const row of rows) {
+            if (row.personId === null) {
+                continue;
+            }
+
+            let person = peopleById.get(row.personId);
+
+            if (!person) {
+                person = {
+                    id: row.personId,
+                    planCenterId: row.personCenterId,
+                    name: row.personName,
+                    positionName: row.positionName,
+                    thumbnailUrl: row.thumbnailUrl,
+                    assignments: [],
+                };
+
+                peopleById.set(row.personId, person);
+                result.people.push(person);
+            }
+
+            if (
+                row.role !== null &&
+                !person.assignments.includes(row.role)
+            ) {
+                person.assignments.push(row.role);
+            }
+        }
+
         return result;
+        /*
+            const test = await this.db
+                .select({
+                    planId: schema.plans.id,
+                    assignmentId: schema.planAssignments.id,
+                })
+                .from(schema.plans)
+                .leftJoin(
+                    schema.planAssignments,
+                    eq(
+                        schema.planAssignments.planId,
+                        schema.plans.id
+                    )
+                );
+
+            console.log(test);
+            */
     }
 }
 

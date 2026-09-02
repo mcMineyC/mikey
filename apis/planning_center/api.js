@@ -30,6 +30,7 @@ export class PlanningCenterAPI {
             };
         } catch (err) {
             console.error('Error fetching next plan:', err.message);
+            console.error("Tried fetching from URL:", `https://api.planningcenteronline.com/services/v2/service_types/${serviceTypeId}/plans?filter=future&order=sort_date&per_page=1`);
             throw err;
         }
     }
@@ -55,6 +56,7 @@ export class PlanningCenterAPI {
             };
         } catch (err) {
             console.error('Error fetching next plan:', err.message);
+            console.error("Tried fetching from URL:", `https://api.planningcenteronline.com/services/v2/service_types/${serviceTypeId}/plans?order=-sort_date&per_page=1`);
             throw err;
         }
     }
@@ -82,6 +84,7 @@ export class PlanningCenterAPI {
             }));
         } catch (err) {
             console.error('Error fetching next plan:', err.message);
+            console.error("Tried fetching from URL:", `https://api.planningcenteronline.com/services/v2/service_types/${serviceTypeId}/plans?order=-sort_date&per_page=1`);
             throw err;
         }
     }

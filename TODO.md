@@ -18,6 +18,8 @@
 - [x] Get plan given id (db or Planning Center)
 - [ ] Get next plan (based on time)
 - [ ] Rotate stored plans based on age
+- [ ] Settings
+- [ ] Client table
 - [ ] Mic assignment field
     - [ ] Add to schema
     - [ ] Return in queries
